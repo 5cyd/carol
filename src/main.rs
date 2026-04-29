@@ -7,7 +7,7 @@ fn main() {
     let mut solver = wordle::State::new();
 
     println!("Wordle solver by 5c");
-    println!("Usage: Enter word and its result.");
+    println!("Enter word and its result.");
     println!("Example: If you enter \"world\" and get ⬛🟨🟩🟨⬛, please type \"world bygyb\".");
 
     loop {
@@ -15,12 +15,15 @@ fn main() {
         io::stdout().flush().unwrap();
 
         let mut input = String::new();
+        // 入力を1行読み取る
         io::stdin()
             .read_line(&mut input)
             .expect("Error reading input.");
 
+        // 入力を単語と結果に分けて空白をトリム
         let input: Vec<&str> = input.split_whitespace().map(|s| s.trim()).collect();
 
+        // 空白がない or 3つ以上に分かれていた場合はやり直し
         if input.len() != 2 {
             println!("Your input is invalid.");
             continue;
@@ -33,15 +36,18 @@ fn main() {
                 break;
             }
             Ok(opt) => match opt {
+                // 答えが定まった場合は終了
                 Some(ans) => {
                     println!("The answer is \"{}\"!", ans);
                     break;
                 }
                 None => {
+                    // 答えの候補数を出力
                     println!(
                         "The current number of possible answers is {}.",
                         solver.possible_answers.len()
                     );
+                    // 候補の単語を最大5個出力する
                     if solver.possible_answers.len() >= 5 {
                         let v: Vec<_> = solver
                             .possible_answers
@@ -49,7 +55,7 @@ fn main() {
                             .take(5)
                             .map(|s| s.as_str())
                             .collect();
-                        println!("({}...)", v.join(", "));
+                        println!("({}, ...)", v.join(", "));
                     } else {
                         let v: Vec<_> =
                             solver.possible_answers.iter().map(|s| s.as_str()).collect();
