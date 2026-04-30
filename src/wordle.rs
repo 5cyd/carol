@@ -1,9 +1,6 @@
 use std::cmp;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fs::File;
-use std::io::BufReader;
-use std::io::prelude::*;
 
 const NUM_ALPHABET: usize = 26;
 const SAME_CHAR_MAX: usize = 3;
@@ -105,29 +102,22 @@ pub struct Solver {
     char_and_num_map: Vec<HashSet<String>>, // 文字とその文字の出現数(ちょうどではなくそれ以上)から単語へのマップ
     knowledge: Knowledge,
     all_words: Vec<String>,
-    answer_char_and_pos_map: Vec<usize>,
 }
 
 impl Solver {
-    // ファイルをロードして初期化した Solver を返す
+    // ワードリストを埋め込んで初期化した Solver を返す
     pub fn new() -> Self {
         let mut possible_answers = HashSet::new();
         let mut char_and_pos_map = vec![HashSet::new(); 5 * NUM_ALPHABET];
         // 1単語に含まれる同じ文字の最大数は3
         let mut char_and_num_map = vec![HashSet::new(); SAME_CHAR_MAX * NUM_ALPHABET];
         let mut all_words = Vec::with_capacity(2315);
-        let mut answer_char_and_pos_map = vec![0; 5 * NUM_ALPHABET];
 
-        // ファイルを開く
-        let file_path = "data/wordle-answers.txt";
-        let file = File::open(file_path).expect("An error occurred opening file.");
-
-        // ファイルを読み込む
-        let reader = BufReader::new(file);
+        let words_str = include_str!("../data/wordle-answers.txt");
 
         // 1行(1単語)ずつ処理する
-        for line in reader.lines() {
-            let word = line.expect("An error occurred reading file.");
+        for word in words_str.lines() {
+            let word = word.to_string();
 
             // 全単語を入れる
             possible_answers.insert(word.clone());
@@ -140,7 +130,6 @@ impl Solver {
                 // 1文字目の b なら index は 1
                 // 2文字目の a なら index は 26
                 char_and_pos_map[offset_from_a(c) + i * NUM_ALPHABET].insert(word.clone());
-                answer_char_and_pos_map[offset_from_a(c) + i * NUM_ALPHABET] += 1;
 
                 char_and_num_map[offset_from_a(c) + count_map[offset_from_a(c)] * NUM_ALPHABET]
                     .insert(word.clone());
@@ -154,7 +143,6 @@ impl Solver {
             char_and_num_map,
             knowledge: Knowledge::new(),
             all_words,
-            answer_char_and_pos_map,
         }
     }
 
@@ -308,13 +296,6 @@ impl Solver {
             }
         }
 
-        self.answer_char_and_pos_map = vec![0; 5 * NUM_ALPHABET];
-        for s in &self.possible_answers {
-            for (i, c) in s.chars().enumerate() {
-                self.answer_char_and_pos_map[offset_from_a(c) + i * NUM_ALPHABET] += 1;
-            }
-        }
-
         // possible_answers の要素が一つだけになったらそれを返す
         // 何かの間違いであり得る答えがなくなったらエラーを返す
         match self.possible_answers.len() {
@@ -348,7 +329,39 @@ impl Solver {
     }
 }
 
-//
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn solver_loads_words() {
+        let solver = Solver::new();
+        assert!(!solver.possible_answers.is_empty());
+        assert!(solver.possible_answers.contains("aback"));
+    }
+
+    #[test]
+    fn solver_give_reduces_candidates() {
+        let mut solver = Solver::new();
+        let initial_count = solver.possible_answers.len();
+        let result = solver
+            .give(
+                "crane",
+                &[
+                    Tile::Black,
+                    Tile::Black,
+                    Tile::Black,
+                    Tile::Black,
+                    Tile::Black,
+                ],
+            )
+            .unwrap();
+        assert!(solver.possible_answers.len() < initial_count);
+        assert!(result.is_none());
+    }
+}
+
+// 単語と答えから1ターンをシミュレートした結果を返す
 fn get_result(guess: &str, answer: &str) -> [Tile; 5] {
     let mut result = [Tile::Black; 5];
 
