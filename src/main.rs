@@ -4,7 +4,7 @@ use std::io::Write;
 mod wordle;
 
 fn main() {
-    let mut solver = wordle::State::new();
+    let mut solver = wordle::Solver::new();
 
     println!("Wordle solver by 5c");
     println!("Enter word and its result.");
@@ -61,6 +61,10 @@ fn main() {
                             solver.possible_answers.iter().map(|s| s.as_str()).collect();
                         println!("({})", v.join(", "));
                     }
+
+                    // 次の最善手を探して出力する
+                    let best_word = solver.search();
+                    println!("Suggested next word: \"{}\"", best_word);
                 }
             },
         }
