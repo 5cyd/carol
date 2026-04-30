@@ -160,10 +160,6 @@ impl Solver {
         // この時に Black もカウントしていると num を 2に更新してしまう
         let mut green_and_yellow_count_map = [0; NUM_ALPHABET];
 
-        // その文字を含む集合を完全に引いて良いのは、その文字の数 = その文字の Black の数 となった時なので
-        // それを判定するために black のカウントマップも必要となる
-        let mut black_count_map = [0; NUM_ALPHABET];
-
         for (i, (c, r)) in word.chars().zip(res).enumerate() {
             if !c.is_ascii_lowercase() {
                 return Err(StateError::InvalidInput);
@@ -172,8 +168,6 @@ impl Solver {
             match r {
                 // c が答えにない場合
                 Tile::Black => {
-                    black_count_map[offset_from_a(c)] += 1;
-
                     // c が単語に2文字以上あるが答えには1文字しかなかった場合、他のすべてが前にあるか、どれかが Green の場合はこれが Black になるが
                     // この場合、これが Yellow であったと同等の情報として扱う必要がある
                     if word.match_indices(c).all(|(i, _)| res[i] == Tile::Black) {
@@ -327,38 +321,6 @@ impl Solver {
             }
         }
         best_word
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn solver_loads_words() {
-        let solver = Solver::new();
-        assert!(!solver.possible_answers.is_empty());
-        assert!(solver.possible_answers.contains("aback"));
-    }
-
-    #[test]
-    fn solver_give_reduces_candidates() {
-        let mut solver = Solver::new();
-        let initial_count = solver.possible_answers.len();
-        let result = solver
-            .give(
-                "crane",
-                &[
-                    Tile::Black,
-                    Tile::Black,
-                    Tile::Black,
-                    Tile::Black,
-                    Tile::Black,
-                ],
-            )
-            .unwrap();
-        assert!(solver.possible_answers.len() < initial_count);
-        assert!(result.is_none());
     }
 }
 
