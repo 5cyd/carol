@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wordle Solver</title>
+  <style>
+    body {
+      font-family: monospace;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 0 20px;
+      background: #fff;
+      color: #222;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    #first-word { color: #555; margin-bottom: 20px; }
+    #input-area { display: flex; flex-direction: column; gap: 12px; }
+    #word-input {
+      font-family: monospace;
+      font-size: 1.2rem;
+      padding: 6px 10px;
+      width: 160px;
+      text-transform: lowercase;
+      border: 2px solid #ccc;
+      border-radius: 4px;
+    }
+    #tiles { display: flex; gap: 6px; }
+    .tile {
+      width: 48px;
+      height: 48px;
+      border: 2px solid #787c7e;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      font-weight: bold;
+      background: #787c7e;
+      color: white;
+      text-transform: uppercase;
+    }
+    .tile.yellow { background: #c9b458; border-color: #c9b458; }
+    .tile.green  { background: #6aaa64; border-color: #6aaa64; }
+    #buttons { display: flex; gap: 8px; }
+    button#submit-btn, button#reset-btn {
+      padding: 8px 16px;
+      font-family: monospace;
+      font-size: 1rem;
+      cursor: pointer;
+      border: 2px solid #ccc;
+      border-radius: 4px;
+      background: #fff;
+    }
+    button#submit-btn:hover { background: #eee; }
+    button#reset-btn:hover  { background: #eee; }
+    button:disabled { opacity: 0.4; cursor: default; }
+    #output { margin-top: 20px; }
+    #output pre {
+      background: #f4f4f4;
+      padding: 10px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      margin: 6px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Wordle Solver</h1>
+  <p id="first-word">Loading...</p>
+
+  <div id="input-area">
+    <input type="text" id="word-input" maxlength="5" placeholder="Enter word" autocomplete="off" />
+    <div id="tiles">
+      <button class="tile" data-index="0"></button>
+      <button class="tile" data-index="1"></button>
+      <button class="tile" data-index="2"></button>
+      <button class="tile" data-index="3"></button>
+      <button class="tile" data-index="4"></button>
+    </div>
+    <div id="buttons">
+      <button id="submit-btn">Submit</button>
+      <button id="reset-btn">Reset</button>
+    </div>
+  </div>
+
+  <div id="output"></div>
+
+  <script type="module">
+    import init, { WasmSolver } from './pkg/wordle_solver.js';
+
+    const STATES = ['black', 'yellow', 'green'];
+    const RESULT_CHARS = ['b', 'y', 'g'];
+    const tileStates = [0, 0, 0, 0, 0];
+    let solver;
+
+    async function setup() {
+      await init();
+      solver = new WasmSolver();
+      document.getElementById('first-word').textContent =
+        `Suggested first word: "${WasmSolver.initial_word()}"`;
+
+      document.getElementById('word-input').addEventListener('input', updateTileLetters);
+
+      document.querySelectorAll('.tile').forEach(tile => {
+        tile.addEventListener('click', () => {
+          const i = parseInt(tile.dataset.index);
+          tileStates[i] = (tileStates[i] + 1) % 3;
+          tile.className = `tile ${STATES[tileStates[i]]}`;
+          updateTileLetters();
+        });
+      });
+
+      document.getElementById('submit-btn').addEventListener('click', submit);
+      document.getElementById('reset-btn').addEventListener('click', reset);
+    }
+
+    function updateTileLetters() {
+      const word = document.getElementById('word-input').value.toLowerCase();
+      document.querySelectorAll('.tile').forEach((tile, i) => {
+        tile.textContent = word[i] || '';
+      });
+    }
+
+    function submit() {
+      const word = document.getElementById('word-input').value.toLowerCase();
+      if (word.length !== 5) {
+        appendOutput('Please enter a 5-letter word.');
+        return;
+      }
+      const result = tileStates.map(s => RESULT_CHARS[s]).join('');
+      const data = JSON.parse(solver.give(word, result));
+
+      if (data.error) {
+        appendOutput(`Error: ${data.error}`);
+        return;
+      }
+
+      if (data.answer) {
+        appendOutput(`The answer is "${data.answer}"!`);
+        document.getElementById('submit-btn').disabled = true;
+        return;
+      }
+
+      const showDots = data.possible_count >= 5;
+      const candidateStr = showDots
+        ? `(${data.candidates.join(', ')}, ...)`
+        : `(${data.candidates.join(', ')})`;
+
+      appendOutput(
+        `The current number of possible answers is ${data.possible_count}.\n` +
+        `${candidateStr}\n` +
+        `Suggested next word: "${data.next_word}"`
+      );
+
+      document.getElementById('word-input').value = '';
+      tileStates.fill(0);
+      document.querySelectorAll('.tile').forEach(tile => {
+        tile.className = 'tile';
+        tile.textContent = '';
+      });
+    }
+
+    function appendOutput(text) {
+      const pre = document.createElement('pre');
+      pre.textContent = text;
+      document.getElementById('output').appendChild(pre);
+    }
+
+    function reset() {
+      solver.free();
+      solver = new WasmSolver();
+      tileStates.fill(0);
+      document.querySelectorAll('.tile').forEach(tile => {
+        tile.className = 'tile';
+        tile.textContent = '';
+      });
+      document.getElementById('word-input').value = '';
+      document.getElementById('output').innerHTML = '';
+      document.getElementById('submit-btn').disabled = false;
+    }
+
+    setup();
+  </script>
+</body>
+</html>
