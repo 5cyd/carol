@@ -10,6 +10,7 @@ fn main() {
     println!("Wordle solver by 5c");
     println!("Enter word and its result.");
     println!("Example: If you enter \"world\" and get ⬛🟨🟩🟨⬛, please type \"world bygyb\".");
+    println!("Suggested first word: \"{}\"", wordle::INITIAL_BEST_WORD);
 
     loop {
         print!("> ");

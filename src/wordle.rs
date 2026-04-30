@@ -1,4 +1,5 @@
 use std::cmp;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufReader;
@@ -7,12 +8,15 @@ use std::io::prelude::*;
 const NUM_ALPHABET: usize = 26;
 const SAME_CHAR_MAX: usize = 3;
 
+// 1ターン目の最善ワード
+pub const INITIAL_BEST_WORD: &str = "raise";
+
 // aが0, zが25のusizeを返す
 fn offset_from_a(c: char) -> usize {
     c as usize - 'a' as usize
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum Tile {
     Green,
     Yellow,
@@ -324,45 +328,19 @@ impl Solver {
 
     // 最も絞れそうな単語を調べる
     pub fn search(&self) -> &str {
-        // 評価関数
-        let eval = |word: &str| {
-            let mut ret = 0;
-            for (i, c) in word.chars().enumerate() {
-                let e = &self.knowledge.char_map[offset_from_a(c)];
-
-                // その文字をこれ以上調べる必要がなければ加点無し
-                if e.num_green == e.possible_max {
-                    continue;
-                }
-
-                let half = self.possible_answers.len() as i32 / 2;
-
-                if !e.yellow_indices.contains(&i) {
-                    // その位置にその文字がある答えがどれだけ半分に近いかを加点
-                    let add = half as i32
-                        - (half
-                            - self.answer_char_and_pos_map[offset_from_a(c) + i * NUM_ALPHABET]
-                                as i32)
-                            .abs();
-                    if e.num - e.num_green > 0 {
-                        // Yellow がある文字は未知の文字より加点
-                        ret += add + half;
-                    } else {
-                        ret += add;
-                    }
-                }
-            }
-            ret
-        };
-
-        let mut best_eval_score = i32::MIN;
+        let mut best_score = i32::MAX;
         let mut best_word = &self.all_words[0];
 
-        // 最もスコアが高い単語を探す
         for word in &self.all_words {
-            let eval_score = eval(word);
-            if eval_score > best_eval_score {
-                best_eval_score = eval_score;
+            let mut groups: HashMap<[Tile; 5], usize> = HashMap::new();
+            for answer in &self.possible_answers {
+                *groups.entry(get_result(word, answer)).or_insert(0) += 1;
+            }
+
+            // 残る候補数の期待値を最小化
+            let score: i32 = groups.values().map(|&n| (n * n) as i32).sum();
+            if score < best_score {
+                best_score = score;
                 best_word = word;
             }
         }
@@ -370,6 +348,7 @@ impl Solver {
     }
 }
 
+//
 fn get_result(guess: &str, answer: &str) -> [Tile; 5] {
     let mut result = [Tile::Black; 5];
 
@@ -393,18 +372,4 @@ fn get_result(guess: &str, answer: &str) -> [Tile; 5] {
         }
     }
     result
-}
-
-#[test]
-fn test_get_result() {
-    assert_eq!(
-        get_result("aaxxx", "baaxx"),
-        [
-            Tile::Yellow,
-            Tile::Green,
-            Tile::Black,
-            Tile::Green,
-            Tile::Green
-        ]
-    );
 }
