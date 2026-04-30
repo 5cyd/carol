@@ -176,16 +176,17 @@ impl Solver {
 
                     // c が単語に2文字以上あるが答えには1文字しかなかった場合、他のすべてが前にあるか、どれかが Green の場合はこれが Black になるが
                     // この場合、これが Yellow であったと同等の情報として扱う必要がある
-                    if word.matches(c).count() > black_count_map[offset_from_a(c)] {
-                        // 他に同じ文字があった場合は Yellow として処理する
-                        self.possible_answers = &self.possible_answers
-                            & &(&self.char_and_num_map[offset_from_a(c)]
-                                - &self.char_and_pos_map[offset_from_a(c) + i * NUM_ALPHABET]);
-                    } else {
+                    if word.match_indices(c).all(|(i, _)| res[i] == Tile::Black) {
                         // その文字を含む集合を引く
                         self.possible_answers =
                             &self.possible_answers - &self.char_and_num_map[offset_from_a(c)];
+                    } else {
+                        // 他に Black でない同じ文字があった場合は Yellow として処理する
+                        self.possible_answers = &self.possible_answers
+                            & &(&self.char_and_num_map[offset_from_a(c)]
+                                - &self.char_and_pos_map[offset_from_a(c) + i * NUM_ALPHABET]);
                     }
+
                     let e = &mut self.knowledge.char_map[offset_from_a(c)];
                     e.is_black = true;
                     e.yellow_indices.insert(i);
