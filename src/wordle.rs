@@ -158,11 +158,11 @@ impl Solver {
         // ただし、その文字が Black だった場合はカウントしない
         // 例えば、1と4文字目が同じで1文字目は Black , 4文字目は Green なことがあり得るが
         // この時に Black もカウントしていると num を 2に更新してしまう
-        let mut green_and_yellow_count_map = vec![0; NUM_ALPHABET];
+        let mut green_and_yellow_count_map = [0; NUM_ALPHABET];
 
         // その文字を含む集合を完全に引いて良いのは、その文字の数 = その文字の Black の数 となった時なので
         // それを判定するために black のカウントマップも必要となる
-        let mut black_count_map = vec![0; NUM_ALPHABET];
+        let mut black_count_map = [0; NUM_ALPHABET];
 
         for (i, (c, r)) in word.chars().zip(res).enumerate() {
             if !c.is_ascii_lowercase() {
@@ -366,8 +366,8 @@ mod tests {
 fn get_result(guess: &str, answer: &str) -> [Tile; 5] {
     let mut result = [Tile::Black; 5];
 
-    let mut count_map = vec![0; NUM_ALPHABET];
-    let mut num_matches_map = vec![0; NUM_ALPHABET];
+    let mut count_map = [0; NUM_ALPHABET];
+    let mut num_matches_map = [0; NUM_ALPHABET];
 
     // まず Green を確定
     for (i, (g, a)) in guess.chars().zip(answer.chars()).enumerate() {
