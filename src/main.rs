@@ -1,5 +1,6 @@
 use std::io;
 use std::io::Write;
+use wordle::StrExt;
 
 mod wordle;
 
@@ -29,7 +30,16 @@ fn main() {
             continue;
         }
 
-        match solver.give(input[0], input[1]) {
+        // 結果を Tiles に変換
+        let res = match input[1].to_tiles() {
+            Ok(tiles) => tiles,
+            Err(_) => {
+                println!("Your input is invalid.");
+                continue;
+            }
+        };
+
+        match solver.give(input[0], &res) {
             Err(wordle::StateError::InvalidInput) => println!("Your input is invalid."),
             Err(wordle::StateError::NoAnswer) => {
                 println!("No way...");

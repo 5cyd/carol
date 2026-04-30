@@ -5,10 +5,47 @@ use std::io::BufReader;
 use std::io::prelude::*;
 
 const NUM_ALPHABET: usize = 26;
+const SAME_CHAR_MAX: usize = 3;
 
 // aが0, zが25のusizeを返す
 fn offset_from_a(c: char) -> usize {
     c as usize - 'a' as usize
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Tile {
+    Green,
+    Yellow,
+    Black,
+}
+
+// char から Tile への変換
+impl TryFrom<char> for Tile {
+    type Error = ();
+    fn try_from(c: char) -> Result<Self, ()> {
+        match c {
+            'g' => Ok(Tile::Green),
+            'y' => Ok(Tile::Yellow),
+            'b' => Ok(Tile::Black),
+            _ => Err(()),
+        }
+    }
+}
+
+pub trait StrExt {
+    fn to_tiles(&self) -> Result<[Tile; 5], ()>;
+}
+
+impl StrExt for &str {
+    // &str から Tiles への変換
+    fn to_tiles(&self) -> Result<[Tile; 5], ()> {
+        TryInto::<[Tile; 5]>::try_into(
+            self.chars()
+                .map(Tile::try_from)
+                .collect::<Result<Vec<_>, _>>()?,
+        )
+        .map_err(|_| ())
+    }
 }
 
 #[derive(Clone)]
@@ -18,7 +55,8 @@ struct CharInfo {
     num_green: usize,    // 分かっているこの文字の Green の数
     possible_max: usize, // 答えにあるこの文字の数のあり得る最大値
     // この文字で Yellow が出た位置
-    // 「現時点で未発見と仮定した Yellow の Green にならない位置」という意味で使うので、この文字含むすべての分かっている Green がここにも含まれる
+    // 「現時点で未発見と仮定した Yellow の Green にならない位置」という意味で使うので
+    // この文字含むすべての分かっている Green がここにも含まれる
     yellow_indices: HashSet<usize>,
 }
 
@@ -28,7 +66,7 @@ impl CharInfo {
             is_black: false,
             num: 0,
             num_green: 0,
-            possible_max: 3,
+            possible_max: SAME_CHAR_MAX,
             yellow_indices: HashSet::new(),
         }
     }
@@ -50,6 +88,7 @@ impl Knowledge {
     }
 }
 
+#[derive(Debug)]
 pub enum StateError {
     InvalidInput,
     NoAnswer,
@@ -70,10 +109,10 @@ impl Solver {
     pub fn new() -> Self {
         let mut possible_answers = HashSet::new();
         let mut char_and_pos_map = vec![HashSet::new(); 5 * NUM_ALPHABET];
-        let mut char_map = vec![HashSet::new(); NUM_ALPHABET];
         // 1単語に含まれる同じ文字の最大数は3
-        let mut char_and_num_map = vec![HashSet::new(); 3 * NUM_ALPHABET];
+        let mut char_and_num_map = vec![HashSet::new(); SAME_CHAR_MAX * NUM_ALPHABET];
         let mut all_words = Vec::with_capacity(2315);
+        let mut answer_char_and_pos_map = vec![0; 5 * NUM_ALPHABET];
 
         // ファイルを開く
         let file_path = "data/wordle-answers.txt";
@@ -96,9 +135,8 @@ impl Solver {
                 // 1文字目の a なら index は 0
                 // 1文字目の b なら index は 1
                 // 2文字目の a なら index は 26
-                char_and_pos_map[offset_from_a(c) + NUM_ALPHABET * i].insert(word.clone());
-
-                char_map[offset_from_a(c)].insert(word.clone());
+                char_and_pos_map[offset_from_a(c) + i * NUM_ALPHABET].insert(word.clone());
+                answer_char_and_pos_map[offset_from_a(c) + i * NUM_ALPHABET] += 1;
 
                 char_and_num_map[offset_from_a(c) + count_map[offset_from_a(c)] * NUM_ALPHABET]
                     .insert(word.clone());
@@ -112,15 +150,15 @@ impl Solver {
             char_and_num_map,
             knowledge: Knowledge::new(),
             all_words,
-            answer_char_and_pos_map: vec![0; 5 * NUM_ALPHABET],
+            answer_char_and_pos_map,
         }
     }
 
     // 1ターンの結果を与える
     // 答えが定まった場合には Some(ans) として返る
-    pub fn give(&mut self, word: &str, res: &str) -> Result<Option<String>, StateError> {
+    pub fn give(&mut self, word: &str, res: &[Tile; 5]) -> Result<Option<String>, StateError> {
         // 不正な入力の場合はエラーを返す
-        if word.len() != 5 || res.len() != 5 {
+        if word.len() != 5 {
             return Err(StateError::InvalidInput);
         }
 
@@ -130,18 +168,18 @@ impl Solver {
         // この時に Black もカウントしていると num を 2に更新してしまう
         let mut green_and_yellow_count_map = vec![0; NUM_ALPHABET];
 
-        // その文字が完全に Black と扱えるのは、その文字の数 = その文字の Black の数 となった時なので
+        // その文字を含む集合を完全に引いて良いのは、その文字の数 = その文字の Black の数 となった時なので
         // それを判定するために black のカウントマップも必要となる
         let mut black_count_map = vec![0; NUM_ALPHABET];
 
-        for (i, (c, r)) in word.chars().zip(res.chars()).enumerate() {
+        for (i, (c, r)) in word.chars().zip(res).enumerate() {
             if !c.is_ascii_lowercase() {
                 return Err(StateError::InvalidInput);
             }
 
             match r {
                 // c が答えにない場合
-                'b' => {
+                Tile::Black => {
                     black_count_map[offset_from_a(c)] += 1;
 
                     // c が単語に2文字以上あるが答えには1文字しかなかった場合、他のすべてが前にあるか、どれかが Green の場合はこれが Black になるが
@@ -161,7 +199,7 @@ impl Solver {
                     e.yellow_indices.insert(i);
                 }
                 // c はあるが場所が違う場合
-                'y' => {
+                Tile::Yellow => {
                     green_and_yellow_count_map[offset_from_a(c)] += 1;
 
                     // possible_answers と c を含む単語の積集合から、c の場所が一致する集合を引く
@@ -178,7 +216,7 @@ impl Solver {
                     }
                 }
                 // c の場所もあっている場合
-                'g' => {
+                Tile::Green => {
                     green_and_yellow_count_map[offset_from_a(c)] += 1;
 
                     // possible_answers と c の場所も一致する単語の積集合
@@ -196,8 +234,6 @@ impl Solver {
                         e.num += 1;
                     }
                 }
-                // 結果の入力がいずれでもなかった場合はエラーを返す
-                _ => return Err(StateError::InvalidInput),
             }
         }
 
@@ -230,7 +266,7 @@ impl Solver {
                 e.num
             } else {
                 cmp::min(
-                    3,
+                    SAME_CHAR_MAX,
                     5 - cmp::max(
                         self.knowledge.num - e.num,
                         e.yellow_indices.len() - e.num_green,
@@ -293,19 +329,23 @@ impl Solver {
             let mut ret = 0;
             for (i, c) in word.chars().enumerate() {
                 let e = &self.knowledge.char_map[offset_from_a(c)];
-                if e.is_black || e.num == e.possible_max {
+
+                // その文字をこれ以上調べる必要がなければ加点無し
+                if e.num_green == e.possible_max {
                     continue;
                 }
 
                 let half = self.possible_answers.len() as i32 / 2;
 
                 if !e.yellow_indices.contains(&i) {
+                    // その位置にその文字がある答えがどれだけ半分に近いかを加点
                     let add = half as i32
                         - (half
                             - self.answer_char_and_pos_map[offset_from_a(c) + i * NUM_ALPHABET]
                                 as i32)
                             .abs();
                     if e.num - e.num_green > 0 {
+                        // Yellow がある文字は未知の文字より加点
                         ret += add + half;
                     } else {
                         ret += add;
@@ -315,16 +355,56 @@ impl Solver {
             ret
         };
 
-        let mut best_eval_value = i32::MIN;
+        let mut best_eval_score = i32::MIN;
         let mut best_word = &self.all_words[0];
 
+        // 最もスコアが高い単語を探す
         for word in &self.all_words {
-            let eval_value = eval(word);
-            if eval_value > best_eval_value {
-                best_eval_value = eval_value;
+            let eval_score = eval(word);
+            if eval_score > best_eval_score {
+                best_eval_score = eval_score;
                 best_word = word;
             }
         }
         best_word
     }
+}
+
+fn get_result(guess: &str, answer: &str) -> [Tile; 5] {
+    let mut result = [Tile::Black; 5];
+
+    let mut count_map = vec![0; NUM_ALPHABET];
+    let mut num_matches_map = vec![0; NUM_ALPHABET];
+
+    // まず Green を確定
+    for (i, (g, a)) in guess.chars().zip(answer.chars()).enumerate() {
+        if g == a {
+            result[i] = Tile::Green;
+            num_matches_map[offset_from_a(g)] += 1;
+        }
+        count_map[offset_from_a(a)] += 1;
+    }
+
+    // 次に Yellow を判定
+    for (i, (g, a)) in guess.chars().zip(answer.chars()).enumerate() {
+        if g != a && count_map[offset_from_a(g)] > num_matches_map[offset_from_a(g)] {
+            result[i] = Tile::Yellow;
+            num_matches_map[offset_from_a(g)] += 1;
+        }
+    }
+    result
+}
+
+#[test]
+fn test_get_result() {
+    assert_eq!(
+        get_result("aaxxx", "baaxx"),
+        [
+            Tile::Yellow,
+            Tile::Green,
+            Tile::Black,
+            Tile::Green,
+            Tile::Green
+        ]
+    );
 }
