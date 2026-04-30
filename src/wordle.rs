@@ -101,7 +101,7 @@ pub struct Solver {
     char_and_pos_map: Vec<HashSet<String>>, // 文字と場所からそれを含む単語へのマップ
     char_and_num_map: Vec<HashSet<String>>, // 文字とその文字の出現数(ちょうどではなくそれ以上)から単語へのマップ
     knowledge: Knowledge,
-    all_words: Vec<String>,
+    pub all_words: Vec<String>,
 }
 
 impl Solver {
@@ -226,8 +226,6 @@ impl Solver {
 
         let mut i = 0;
         while i < NUM_ALPHABET {
-            let mut increment = true;
-
             let e = &mut self.knowledge.char_map[i];
             // 各 yellow_indices を更新(既にある Green の場所はあり得ないので Yellow と見なせる)
             e.yellow_indices = &e.yellow_indices | &self.knowledge.green_indices;
@@ -243,9 +241,9 @@ impl Solver {
                         e.num_green += 1;
                     }
                 }
-                // これが作動した場合は green_indices が更新されるので、ループをやり直す必要がある
+                // green_indices が更新されたのでループをやり直す
                 i = 0;
-                increment = false;
+                continue;
             }
 
             // 各文字のあり得る最大数を調べる
@@ -286,9 +284,7 @@ impl Solver {
                 }
                 (_, _) => (),
             }
-            if increment {
-                i += 1;
-            }
+            i += 1;
         }
 
         // possible_answers の要素が一つだけになったらそれを返す
@@ -325,7 +321,7 @@ impl Solver {
 }
 
 // 単語と答えから1ターンをシミュレートした結果を返す
-fn get_result(guess: &str, answer: &str) -> [Tile; 5] {
+pub fn get_result(guess: &str, answer: &str) -> [Tile; 5] {
     let mut result = [Tile::Black; 5];
 
     let mut count_map = [0; NUM_ALPHABET];

@@ -1,4 +1,4 @@
-mod wordle;
+pub mod wordle;
 
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
